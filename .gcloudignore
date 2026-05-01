@@ -1,0 +1,9 @@
+node_modules/
+.venv/
+.git/
+.env
+dist/
+build/
+*.log
+scratch/
+.gemini/

@@ -1,0 +1,629 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Neon Snake</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #0a0a1a;
+            color: white;
+            font-family: 'Press Start 2P', cursive, sans-serif; /* A retro arcade font is often preferred for such games */
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        /* Fallback for 'Press Start 2P' font - if not loaded, it will use a generic sans-serif */
+        @font-face {
+            font-family: 'Press Start 2P';
+            src: url('https://fonts.gstatic.com/s/pressstart2p/v15/8iM-Eo_etgYqR7gsUPSEzts_s_S6jQ.woff2') format('woff2');
+            unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+            font-weight: 400;
+            font-style: normal;
+        }
+        canvas {
+            display: block;
+            background: #0a0a1a;
+            /* Canvas size will be managed by JS to maintain aspect ratio and grid */
+        }
+        #game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Allows mouse events to pass through to canvas if needed */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+            font-size: min(2.2vmin, 16px); /* Responsive font size */
+            text-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff; /* Neon glow for text */
+            opacity: 0.9;
+            line-height: 1.2;
+        }
+        .hud-left, .hud-right {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        .hud-bottom {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            text-align: center;
+            min-height: 2.5vmin; /* Ensure space for powerup display */
+        }
+        .powerup-indicator {
+            display: inline-block;
+            margin: 0 8px;
+            padding: 4px 10px;
+            border-radius: 5px;
+            border: 1px solid;
+            box-shadow: 0 0 8px;
+            font-size: 1.8vmin;
+        }
+        /* Specific powerup styles for glow colors */
+        .powerup-indicator.speed { border-color: #ffff00; box-shadow: 0 0 8px #ffff00; text-shadow: 0 0 5px #ffff00; color: #ffff00; }
+        .powerup-indicator.multiplier { border-color: #ff8800; box-shadow: 0 0 8px #ff8800; text-shadow: 0 0 5px #ff8800; color: #ff8800; }
+        .powerup-indicator.shrink { border-color: #8800ff; box-shadow: 0 0 8px #8800ff; text-shadow: 0 0 5px #8800ff; color: #8800ff; }
+
+        #message-area {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px 40px;
+            border-radius: 10px;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 15px #00ffff, inset 0 0 10px #00ffff;
+            animation: pulse 1.5s infinite alternate;
+            display: none; /* Hidden by default */
+            pointer-events: auto; /* Allows interaction for restart */
+            width: 60vmin;
+            max-width: 80%;
+            font-size: min(2.5vmin, 18px);
+            line-height: 1.4;
+            z-index: 10;
+        }
+        #message-area h1 {
+            color: #00ff88;
+            text-shadow: 0 0 10px #00ff88, 0 0 20px #00ff88;
+            font-size: min(4.5vmin, 32px);
+            margin-bottom: 15px;
+            margin-top: 0;
+        }
+        #message-area p {
+            margin-bottom: 10px;
+        }
+        #message-area .controls {
+            margin-top: 20px;
+            font-size: min(1.8vmin, 14px);
+            opacity: 0.8;
+            line-height: 1.5;
+        }
+        @keyframes pulse {
+            from {
+                box-shadow: 0 0 15px #00ffff, inset 0 0 10px #00ffff;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            to {
+                box-shadow: 0 0 25px #00ffff, inset 0 0 15px #00ffff;
+                transform: translate(-50%, -50%) scale(1.02);
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="game-overlay">
+        <div class="hud-top">
+            <div class="hud-left">
+                <div>SCORE: <span id="score">0</span></div>
+                <div>HIGH SCORE: <span id="highScore">0</span></div>
+            </div>
+            <div class="hud-right">
+                <div>LENGTH: <span id="length">1</span></div>
+                <div>SPEED: <span id="currentSpeed">1x</span></div>
+            </div>
+        </div>
+        <div class="hud-bottom" id="activePowerups">
+            <!-- Power-up indicators will go here -->
+        </div>
+    </div>
+
+    <div id="message-area">
+        <h1 id="message-title">NEON SNAKE</h1>
+        <p id="message-text">Press ENTER to Start</p>
+        <p class="controls">
+            Use ARROW keys or WASD to move.<br>
+            Collect glowing food to grow.
+        </p>
+    </div>
+
+    <script>
+        try { window.focus(); } catch(e) {}
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const highScoreDisplay = document.getElementById('highScore');
+        const lengthDisplay = document.getElementById('length');
+        const speedDisplay = document.getElementById('currentSpeed');
+        const activePowerupsDisplay = document.getElementById('activePowerups');
+        const messageArea = document.getElementById('message-area');
+        const messageTitle = document.getElementById('message-title');
+        const messageText = document.getElementById('message-text');
+
+        // Game State
+        const GAME_STATE = {
+            TITLE: 'TITLE',
+            PLAYING: 'PLAYING',
+            GAME_OVER: 'GAME_OVER'
+        };
+        let gameState = GAME_STATE.TITLE;
+
+        // Game Constants
+        const GRID_SIZE = 25; // Number of cells wide/high (e.g., 25x25 grid)
+        const INITIAL_SNAKE_SPEED_INTERVAL = 0.18; // seconds per grid step (lower is faster)
+        const MIN_SNAKE_SPEED_INTERVAL = 0.05; // Max speed interval (fastest speed)
+        const SPEED_DECREASE_PER_FOOD = 0.007; // How much `snakeSpeedInterval` decreases per food eaten
+        const POWERUP_DURATION = 8; // seconds
+        const POWERUP_SPAWN_CHANCE = 0.35; // Chance a powerup spawns instead of regular food
+        const MAX_SHRINK_LENGTH = 3; // Snake won't shrink below this length
+
+        // Colors
+        const COLOR_BG = '#0a0a1a';
+        const COLOR_SNAKE_HEAD = '#00ffff'; // Cyan
+        const COLOR_SNAKE_BODY = '#00ff88'; // Green
+        const COLOR_FOOD = '#ff00ff';     // Magenta
+        const COLOR_POWERUP_SPEED = '#ffff00'; // Yellow
+        const COLOR_POWERUP_MULTIPLIER = '#ff8800'; // Orange
+        const COLOR_POWERUP_SHRINK = '#8800ff'; // Purple
+        const COLOR_PARTICLE_BASE = '#ffffff'; // White for particles
+
+        // Sound Effects (Web Audio API)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type = 'eat', frequency = 440, duration = 0.1, volume = 0.3, wave = 'sine') {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.type = wave;
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+
+            gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+
+            if (type === 'gameover') {
+                oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + duration);
+            } else if (type === 'powerup') {
+                oscillator.frequency.setValueAtTime(frequency * 1.5, audioContext.currentTime + duration / 2);
+                oscillator.frequency.exponentialRampToValueAtTime(frequency / 2, audioContext.currentTime + duration);
+            }
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // Game Variables
+        let cellSize; // Calculated based on canvas size
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('neonSnakeHighScore') || '0');
+        let snake = [];
+        let dx = 0, dy = 0; // Direction (dx, dy)
+        let food = {}; // {x, y, type: 'food'|'speed'|'multiplier'|'shrink'}
+        let particles = [];
+        let lastTime = 0;
+        let timeSinceLastMove = 0;
+        let snakeSpeedInterval = INITIAL_SNAKE_SPEED_INTERVAL; // Current interval for snake movement
+        let currentSpeedMultiplier = 1; // Visual for HUD
+
+        // Power-up states
+        let activePowerups = {
+            speed: { active: false, timer: 0 },
+            multiplier: { active: false, timer: 0, value: 1 }
+        };
+
+        // Screen shake
+        let screenShake = {
+            active: false,
+            duration: 0,
+            magnitude: 0,
+            elapsed: 0
+        };
+
+        // Keyboard input handling
+        let changingDirection = false; // Prevent multiple direction changes per frame
+        let lastDirection = {dx: 1, dy: 0}; // Store last valid direction
+
+        const KEY_MAP = {
+            'ArrowUp': { dx: 0, dy: -1 }, 'w': { dx: 0, dy: -1 },
+            'ArrowDown': { dx: 0, dy: 1 }, 's': { dx: 0, dy: 1 },
+            'ArrowLeft': { dx: -1, dy: 0 }, 'a': { dx: -1, dy: 0 },
+            'ArrowRight': { dx: 1, dy: 0 }, 'd': { dx: 1, dy: 0 }
+        };
+
+        document.addEventListener('keydown', e => {
+            if (gameState === GAME_STATE.TITLE && e.key === 'Enter') {
+                startGame();
+                return;
+            }
+            if (gameState === GAME_STATE.GAME_OVER && e.key === 'Enter') {
+                startGame();
+                return;
+            }
+
+            if (gameState !== GAME_STATE.PLAYING || changingDirection) return;
+
+            const newDirection = KEY_MAP[e.key.toLowerCase()];
+            if (newDirection) {
+                // Prevent reversing completely
+                if (Math.abs(newDirection.dx) === Math.abs(lastDirection.dx) && Math.abs(newDirection.dy) === Math.abs(lastDirection.dy)) {
+                    // Not a valid change, e.g., trying to move right then immediately left
+                    if (newDirection.dx === -lastDirection.dx && newDirection.dy === -lastDirection.dy) {
+                        return; // Trying to move directly opposite
+                    }
+                }
+
+                dx = newDirection.dx;
+                dy = newDirection.dy;
+                lastDirection = { dx, dy };
+                changingDirection = true; // Block further changes until next update
+            }
+        });
+
+        // Initialize game on window load
+        window.addEventListener('load', setupCanvas);
+        window.addEventListener('resize', setupCanvas);
+
+        function setupCanvas() {
+            // Keep the canvas square and centered, adapting to window size
+            const size = Math.min(window.innerWidth, window.innerHeight) * 0.9; // 90% of smaller dimension
+            canvas.width = size;
+            canvas.height = size;
+            cellSize = canvas.width / GRID_SIZE;
+
+            if (gameState === GAME_STATE.TITLE) {
+                drawTitleScreen();
+            } else if (gameState === GAME_STATE.GAME_OVER) {
+                drawGameOverScreen();
+            }
+        }
+
+        function initGame() {
+            score = 0;
+            scoreDisplay.textContent = score;
+            highScoreDisplay.textContent = highScore;
+            snakeSpeedInterval = INITIAL_SNAKE_SPEED_INTERVAL;
+            timeSinceLastMove = 0;
+            currentSpeedMultiplier = 1;
+
+            snake = [{ x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2) }];
+            // Start with a small body to make it visible
+            for (let i = 1; i < 3; i++) {
+                snake.push({ x: snake[0].x - i, y: snake[0].y });
+            }
+            dx = 1; // Initial direction: right
+            dy = 0;
+            lastDirection = {dx: 1, dy: 0};
+            
+            spawnFood();
+            
+            particles = [];
+            activePowerups = {
+                speed: { active: false, timer: 0 },
+                multiplier: { active: false, timer: 0, value: 1 }
+            };
+            screenShake.active = false;
+        }
+
+        function startGame() {
+            gameState = GAME_STATE.PLAYING;
+            messageArea.style.display = 'none';
+            initGame();
+            lastTime = performance.now(); // Reset lastTime for smooth start
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop(timestamp) {
+            if (gameState !== GAME_STATE.PLAYING) return;
+
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // Cap dt to prevent spiral of death
+            lastTime = timestamp;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(dt) {
+            updatePowerups(dt);
+
+            timeSinceLastMove += dt * (activePowerups.speed.active ? 2 : 1); // Speed boost doubles effective dt for movement
+            changingDirection = false; // Allow new direction input
+
+            if (timeSinceLastMove >= snakeSpeedInterval) {
+                moveSnake();
+                timeSinceLastMove -= snakeSpeedInterval; // Subtract, don't reset to avoid cumulative drift
+            }
+
+            updateParticles(dt);
+            updateScreenShake(dt);
+        }
+
+        function moveSnake() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // Wrap-around edges
+            head.x = (head.x + GRID_SIZE) % GRID_SIZE;
+            head.y = (head.y + GRID_SIZE) % GRID_SIZE;
+
+            // Check for collision with self
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            snake.unshift(head); // Add new head
+
+            // Check if food is eaten
+            if (head.x === food.x && head.y === food.y) {
+                handleFoodConsumption();
+            } else {
+                snake.pop(); // Remove tail if no food eaten
+            }
+
+            updateHud();
+        }
+
+        function handleFoodConsumption() {
+            const originalFood = { ...food }; // Keep original food for particle effects
+            createParticles(originalFood.x * cellSize + cellSize / 2, originalFood.y * cellSize + cellSize / 2, originalFood.color);
+            screenShake.active = true;
+            screenShake.duration = 0.2;
+            screenShake.magnitude = 5;
+            screenShake.elapsed = 0;
+
+            switch (food.type) {
+                case 'food':
+                    score += 10 * activePowerups.multiplier.value;
+                    playSound('eat', 660, 0.1, 0.4);
+                    break;
+                case 'speed':
+                    activePowerups.speed.active = true;
+                    activePowerups.speed.timer = POWERUP_DURATION;
+                    score += 50 * activePowerups.multiplier.value;
+                    playSound('powerup', 880, 0.2, 0.5, 'triangle');
+                    break;
+                case 'multiplier':
+                    activePowerups.multiplier.active = true;
+                    activePowerups.multiplier.timer = POWERUP_DURATION;
+                    activePowerups.multiplier.value = 2; // Doubles score
+                    score += 50 * activePowerups.multiplier.value;
+                    playSound('powerup', 990, 0.2, 0.5, 'square');
+                    break;
+                case 'shrink':
+                    score += 20 * activePowerups.multiplier.value;
+                    playSound('powerup', 440, 0.2, 0.5, 'sawtooth');
+                    if (snake.length > MAX_SHRINK_LENGTH) {
+                        snake.splice(snake.length - Math.min(snake.length - MAX_SHRINK_LENGTH, 3)); // Shrink by up to 3 segments
+                    }
+                    break;
+            }
+
+            // Increase difficulty (reduce interval)
+            snakeSpeedInterval = Math.max(MIN_SNAKE_SPEED_INTERVAL, snakeSpeedInterval - SPEED_DECREASE_PER_FOOD);
+            currentSpeedMultiplier = Math.round(INITIAL_SNAKE_SPEED_INTERVAL / snakeSpeedInterval);
+            
+            spawnFood();
+        }
+
+        function spawnFood() {
+            let newFood;
+            do {
+                const x = Math.floor(Math.random() * GRID_SIZE);
+                const y = Math.floor(Math.random() * GRID_SIZE);
+                let type = 'food';
+                let color = COLOR_FOOD;
+
+                if (Math.random() < POWERUP_SPAWN_CHANCE) {
+                    const powerupTypes = ['speed', 'multiplier', 'shrink'];
+                    type = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+                    switch (type) {
+                        case 'speed': color = COLOR_POWERUP_SPEED; break;
+                        case 'multiplier': color = COLOR_POWERUP_MULTIPLIER; break;
+                        case 'shrink': color = COLOR_POWERUP_SHRINK; break;
+                    }
+                }
+                newFood = { x, y, type, color };
+            } while (isOccupied(newFood.x, newFood.y)); // Ensure food doesn't spawn on snake
+
+            food = newFood;
+        }
+
+        function isOccupied(x, y) {
+            return snake.some(segment => segment.x === x && segment.y === y);
+        }
+
+        function updatePowerups(dt) {
+            let activePowerupIndicators = '';
+            for (const key in activePowerups) {
+                if (activePowerups[key].active) {
+                    activePowerups[key].timer -= dt;
+                    if (activePowerups[key].timer <= 0) {
+                        activePowerups[key].active = false;
+                        if (key === 'multiplier') activePowerups[key].value = 1; // Reset multiplier
+                        if (key === 'speed') currentSpeedMultiplier = Math.round(INITIAL_SNAKE_SPEED_INTERVAL / snakeSpeedInterval); // Reset visual speed
+                    } else {
+                        const timeLeft = Math.ceil(activePowerups[key].timer);
+                        activePowerupIndicators += `<span class="powerup-indicator ${key}">${key.toUpperCase()}: ${timeLeft}s</span>`;
+                    }
+                }
+            }
+            activePowerupsDisplay.innerHTML = activePowerupIndicators;
+        }
+
+        function createParticles(x, y, color, num = 10, spread = 30) {
+            for (let i = 0; i < num; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * spread + 10;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: Math.random() * 2 + 1,
+                    color: color,
+                    lifetime: 1 + Math.random() * 0.5,
+                    alpha: 1
+                });
+            }
+        }
+
+        function updateParticles(dt) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.lifetime -= dt;
+                p.alpha = p.lifetime / 1.5; // Fade out
+
+                if (p.lifetime <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function updateScreenShake(dt) {
+            if (screenShake.active) {
+                screenShake.elapsed += dt;
+                if (screenShake.elapsed >= screenShake.duration) {
+                    screenShake.active = false;
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = COLOR_BG;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            let offsetX = 0;
+            let offsetY = 0;
+            if (screenShake.active) {
+                offsetX = (Math.random() - 0.5) * screenShake.magnitude * 2;
+                offsetY = (Math.random() - 0.5) * screenShake.magnitude * 2;
+            }
+
+            ctx.save();
+            ctx.translate(offsetX, offsetY);
+
+            // Draw food/power-up
+            ctx.beginPath();
+            ctx.arc(food.x * cellSize + cellSize / 2, food.y * cellSize + cellSize / 2, cellSize * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = food.color;
+            ctx.shadowColor = food.color;
+            ctx.shadowBlur = 15;
+            ctx.fill();
+            ctx.shadowBlur = 0; // Reset shadow for next draw
+
+            // Draw snake
+            for (let i = 0; i < snake.length; i++) {
+                const segment = snake[i];
+                const color = (i === 0) ? COLOR_SNAKE_HEAD : COLOR_SNAKE_BODY;
+                const glowSize = (i === 0) ? 20 : 10; // Head glows more
+
+                ctx.beginPath();
+                ctx.rect(segment.x * cellSize, segment.y * cellSize, cellSize, cellSize);
+                ctx.fillStyle = color;
+                ctx.shadowColor = color;
+                ctx.shadowBlur = glowSize;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // Draw particles
+            for (const p of particles) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.alpha;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = p.radius * 3;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.restore();
+        }
+
+        function updateHud() {
+            scoreDisplay.textContent = score;
+            lengthDisplay.textContent = snake.length;
+            speedDisplay.textContent = `${currentSpeedMultiplier}x`;
+        }
+
+        function gameOver() {
+            gameState = GAME_STATE.GAME_OVER;
+            playSound('gameover', 220, 0.5, 0.6, 'sawtooth');
+            createParticles(canvas.width / 2, canvas.height / 2, COLOR_PARTICLE_BASE, 50, 80); // Explosion particles
+            
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('neonSnakeHighScore', highScore);
+            }
+            highScoreDisplay.textContent = highScore;
+
+            drawGameOverScreen();
+        }
+
+        function drawTitleScreen() {
+            messageArea.style.display = 'block';
+            messageTitle.textContent = 'NEON SNAKE';
+            messageText.innerHTML = 'Press ENTER to Start<br>Collect food and power-ups!';
+            messageArea.querySelector('.controls').style.display = 'block';
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = COLOR_BG;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Optionally draw a static snake or glowing elements on title screen
+        }
+
+        function drawGameOverScreen() {
+            messageArea.style.display = 'block';
+            messageTitle.textContent = 'GAME OVER!';
+            messageText.innerHTML = `Final Score: ${score}<br>High Score: ${highScore}<br>Press ENTER to Restart`;
+            messageArea.querySelector('.controls').style.display = 'none'; // Hide general controls
+            
+            // Re-draw the last frame state before overlaying the message.
+            // This happens automatically as the game loop will draw once more
+            // right before setting gameState to GAME_OVER and returning.
+        }
+
+        // Initial setup for the title screen
+        drawTitleScreen();
+    </script>
+</body>
+</html>

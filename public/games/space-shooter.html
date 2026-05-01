@@ -1,0 +1,1129 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Neon Void Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #0a0a1a;
+            color: white;
+            font-family: 'Press Start 2P', cursive;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #0a0a1a; /* Ensure background if canvas isn't full screen */
+        }
+        #hud, #titleScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            z-index: 100;
+        }
+        #hud {
+            background: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            justify-content: flex-start;
+            pointer-events: none;
+            padding: 20px;
+            box-sizing: border-box;
+            display: none;
+        }
+        #hud-top-left {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            text-align: left;
+            font-size: 1.5em;
+            text-shadow: 0 0 8px #00ffff, 0 0 16px #00ffff;
+            pointer-events: auto; /* Allow interaction with health bar */
+        }
+        #hud-bottom-right {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            text-align: right;
+            font-size: 1.2em;
+            text-shadow: 0 0 8px #00ffff, 0 0 16px #00ffff;
+        }
+        #controls-overlay {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ffff;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 1em;
+            text-align: center;
+            box-shadow: 0 0 10px #00ffff, inset 0 0 5px #00ffff;
+            color: #ccffff;
+            z-index: 101;
+            pointer-events: none;
+            opacity: 0.9;
+        }
+
+        .screen-title {
+            font-size: 4em;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff, 0 0 40px #00ffff, 0 0 60px #00ffff;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+        .score-display, .message {
+            font-size: 2em;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+            margin-top: 20px;
+        }
+        .button {
+            background: #007777;
+            color: white;
+            border: 2px solid #00ffff;
+            padding: 15px 30px;
+            font-size: 1.5em;
+            cursor: pointer;
+            border-radius: 10px;
+            margin-top: 30px;
+            box-shadow: 0 0 10px #00ffff, inset 0 0 5px #00ffff;
+            transition: all 0.2s ease;
+            font-family: 'Press Start 2P', cursive;
+        }
+        .button:hover {
+            background: #00aaff;
+            box-shadow: 0 0 20px #00ffff, inset 0 0 10px #00ffff;
+            transform: scale(1.05);
+        }
+        #healthBarContainer {
+            width: 200px;
+            height: 20px;
+            background-color: rgba(255, 0, 0, 0.2);
+            border: 2px solid #ff0000;
+            border-radius: 5px;
+            margin-top: 10px;
+            box-shadow: 0 0 8px #ff0000;
+            overflow: hidden; /* Ensure fill stays within bounds */
+        }
+        #healthBar {
+            height: 100%;
+            width: 100%;
+            background-color: #00ff00;
+            border-radius: 3px;
+            transition: width 0.1s ease-out;
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        /* Enemy Health Bar */
+        .enemy-health-bar {
+            position: absolute;
+            background-color: rgba(255, 0, 0, 0.4);
+            border: 1px solid #ff0000;
+            height: 4px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 3px #ff0000;
+            opacity: 0;
+            transition: opacity 0.2s ease-out;
+            border-radius: 2px;
+            overflow: hidden;
+            z-index: 102; /* Above other HUD but below controls */
+        }
+        .enemy-health-bar-fill {
+            background-color: #00ff00;
+            height: 100%;
+            transition: width 0.1s ease-out;
+            box-shadow: 0 0 2px #00ff00;
+            border-radius: 1px;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="hud">
+            <div id="hud-top-left">
+                SCORE: <span id="scoreDisplay">0</span><br>
+                WAVE: <span id="waveDisplay">1</span><br>
+                HEALTH:
+                <div id="healthBarContainer">
+                    <div id="healthBar"></div>
+                </div>
+            </div>
+            <div id="hud-bottom-right">
+                POWER-UPS:<br>
+                SHIELD: <span id="shieldStatus">OFF</span><br>
+                RAPID FIRE: <span id="rapidFireStatus">OFF</span><br>
+                SPREAD SHOT: <span id="spreadShotStatus">OFF</span>
+            </div>
+        </div>
+
+        <div id="controls-overlay">
+            MOVE: &#8592;&#8593;&#8594;&#8595; (Arrow Keys) or WASD<br>
+            SHOOT: SPACEBAR
+        </div>
+
+        <div id="titleScreen">
+            <h1 class="screen-title">NEON VOID SHOOTER</h1>
+            <button class="button" id="startButton">START GAME</button>
+        </div>
+
+        <div id="gameOverScreen" style="display: none;">
+            <h1 class="screen-title">GAME OVER</h1>
+            <div class="score-display">FINAL SCORE: <span id="finalScoreDisplay">0</span></div>
+            <button class="button" id="restartButton">RESTART</button>
+        </div>
+    </div>
+
+    <script>
+        try { window.focus(); } catch(e) {}
+
+        // --- Game State & Constants ---
+        const GAME_STATE = {
+            TITLE: 0,
+            PLAYING: 1,
+            GAME_OVER: 2
+        };
+        let currentState = GAME_STATE.TITLE;
+
+        const PLAYER_SPEED = 10;
+        const PLAYER_FIRE_RATE = 0.2; // seconds between shots
+        const PLAYER_PROJECTILE_SPEED = 40;
+        const PLAYER_MAX_HEALTH = 100;
+        const INVULNERABILITY_DURATION = 1.5; // seconds after hit
+        const POWERUP_DURATION = 10; // seconds
+
+        const ENEMY_SMALL_SPEED = 8;
+        const ENEMY_SMALL_HEALTH = 20;
+        const ENEMY_BIG_SPEED = 4;
+        const ENEMY_BIG_HEALTH = 80;
+        const ENEMY_BOSS_HEALTH = 500;
+        const BOSS_WAVE_INTERVAL = 3; // Every 3 waves, a boss appears
+
+        // --- DOM Elements ---
+        const gameContainer = document.getElementById('gameContainer');
+        const hud = document.getElementById('hud');
+        const titleScreen = document.getElementById('titleScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const waveDisplay = document.getElementById('waveDisplay');
+        const healthBar = document.getElementById('healthBar');
+        const finalScoreDisplay = document.getElementById('finalScoreDisplay');
+        const shieldStatus = document.getElementById('shieldStatus');
+        const rapidFireStatus = document.getElementById('rapidFireStatus');
+        const spreadShotStatus = document.getElementById('spreadShotStatus');
+        const controlsOverlay = document.getElementById('controls-overlay');
+
+        // --- Three.js Setup ---
+        let scene, camera, renderer;
+        let playerShip;
+        const playerSize = { width: 1.5, height: 2.5 };
+        const cameraZ = 30;
+        const fieldOfView = 75;
+        const nearPlane = 0.1;
+        const farPlane = 1000;
+        const worldWidth = 20; // Visible game world width
+        const worldHeight = 30; // Visible game world height
+
+        let starfieldParticles = [];
+
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0a0a1a, 0.05);
+
+            camera = new THREE.PerspectiveCamera(fieldOfView, window.innerWidth / window.innerHeight, nearPlane, farPlane);
+            camera.position.set(0, -worldHeight / 4, cameraZ);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            gameContainer.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+            pointLight.position.set(0, 10, 20);
+            pointLight.castShadow = true;
+            pointLight.shadow.mapSize.width = 1024;
+            pointLight.shadow.mapSize.height = 1024;
+            pointLight.shadow.camera.near = 0.5;
+            pointLight.shadow.camera.far = 500;
+            scene.add(pointLight);
+
+            // Background Stars
+            const starGeometry = new THREE.BufferGeometry();
+            const starVertices = [];
+            for (let i = 0; i < 500; i++) {
+                const x = Math.random() * worldWidth * 2 - worldWidth;
+                const y = Math.random() * worldHeight * 2 - worldHeight;
+                const z = Math.random() * 100 - 50; // Random depth
+                starVertices.push(x, y, z);
+            }
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const starMaterial = new THREE.PointsMaterial({ color: 0x888888, size: 0.1, transparent: true, opacity: 0.7 });
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+            starfieldParticles.push(stars);
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- Web Audio API Setup ---
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type, volume = 0.5) {
+            if (!audioContext) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = volume;
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            switch (type) {
+                case 'playerShoot':
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+                    break;
+                case 'enemyShoot':
+                    oscillator.type = 'triangle';
+                    oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.15);
+                    break;
+                case 'playerHit':
+                    oscillator.type = 'sawtooth';
+                    oscillator.frequency.setValueAtTime(100, audioContext.currentTime);
+                    oscillator.frequency.linearRampToValueAtTime(50, audioContext.currentTime + 0.1);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+                    break;
+                case 'enemyHit':
+                    oscillator.type = 'square';
+                    oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.08);
+                    break;
+                case 'explosion':
+                    const noise = audioContext.createBufferSource();
+                    const bufferSize = audioContext.sampleRate * 0.5; // 0.5 seconds of noise
+                    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                    const output = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = Math.random() * 2 - 1;
+                    }
+                    noise.buffer = buffer;
+                    noise.loop = false;
+                    const filter = audioContext.createBiquadFilter();
+                    filter.type = 'bandpass';
+                    filter.frequency.setValueAtTime(1000, audioContext.currentTime);
+                    filter.Q.setValueAtTime(10, audioContext.currentTime);
+                    noise.connect(filter);
+                    filter.connect(gainNode);
+                    gainNode.gain.setValueAtTime(volume * 0.5, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+                    noise.start();
+                    noise.stop(audioContext.currentTime + 0.5);
+                    return; // Noise uses different setup
+                case 'powerUp':
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+                    oscillator.frequency.linearRampToValueAtTime(880, audioContext.currentTime + 0.1);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.2);
+                    break;
+                case 'gameOver':
+                    oscillator.type = 'sawtooth';
+                    oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+                    oscillator.frequency.linearRampToValueAtTime(100, audioContext.currentTime + 1);
+                    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 1.5);
+                    break;
+            }
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 1);
+        }
+
+        // --- Game Variables ---
+        let player = {
+            health: PLAYER_MAX_HEALTH,
+            score: 0,
+            lastShotTime: 0,
+            isInvulnerable: false,
+            invulnerableTimer: 0,
+            rapidFireTimer: 0,
+            spreadShotTimer: 0,
+            shieldTimer: 0,
+            mesh: null,
+            projectileColor: 0x00ffff,
+            light: null
+        };
+        let keys = {};
+        let enemies = [];
+        let playerProjectiles = [];
+        let enemyProjectiles = [];
+        let powerUps = [];
+        let particles = [];
+        let enemyHealthBars = []; // Array to store enemy health bar DOM elements
+
+        let wave = 0;
+        let enemiesToSpawn = 0;
+        let spawnTimer = 0;
+        let waveTimer = 0;
+        const WAVE_COOLDOWN = 3; // seconds between waves
+
+        let screenShakeAmount = 0;
+        let screenShakeDuration = 0;
+
+        // --- Geometries and Materials Pool ---
+        const geometries = {};
+        const materials = {};
+
+        function createSharedResources() {
+            // Player Ship Geometry
+            const playerShape = new THREE.Shape();
+            playerShape.moveTo(0, 1.5);
+            playerShape.lineTo(0.5, -0.5);
+            playerShape.lineTo(0.2, -0.5);
+            playerShape.lineTo(0.2, -1.5);
+            playerShape.lineTo(-0.2, -1.5);
+            playerShape.lineTo(-0.2, -0.5);
+            playerShape.lineTo(-0.5, -0.5);
+            playerShape.lineTo(0, 1.5);
+
+            const extrudeSettings = {
+                steps: 1,
+                depth: 0.5,
+                bevelEnabled: true,
+                bevelThickness: 0.1,
+                bevelSize: 0.1,
+                bevelOffset: 0,
+                bevelSegments: 1
+            };
+            geometries.player = new THREE.ExtrudeGeometry(playerShape, extrudeSettings);
+            geometries.player.rotateX(Math.PI / 2); // Orient correctly
+
+            // Enemy Geometries
+            geometries.smallEnemy = new THREE.ConeGeometry(0.8, 1.5, 8);
+            geometries.smallEnemy.rotateX(Math.PI); // Point downwards
+            geometries.bigEnemy = new THREE.DodecahedronGeometry(1.5);
+            geometries.boss = new THREE.CylinderGeometry(4, 4, 2, 16);
+            geometries.boss.rotateX(Math.PI / 2);
+
+            // Projectile Geometry
+            geometries.projectile = new THREE.SphereGeometry(0.2, 8, 8);
+            geometries.enemyProjectile = new THREE.SphereGeometry(0.3, 8, 8);
+
+            // Power-up Geometries
+            geometries.shield = new THREE.IcosahedronGeometry(0.7);
+            geometries.rapidFire = new THREE.BoxGeometry(1, 1, 1);
+            geometries.spreadShot = new THREE.CylinderGeometry(0.7, 0.7, 0.5, 6);
+
+            // Materials
+            materials.player = new THREE.MeshPhongMaterial({ color: 0x00aaff, emissive: 0x003366, emissiveIntensity: 1 });
+            materials.playerShield = new THREE.MeshPhongMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5, emissive: 0x00ff00, emissiveIntensity: 0.5 });
+            materials.smallEnemy = new THREE.MeshPhongMaterial({ color: 0xff0000, emissive: 0x330000, emissiveIntensity: 0.8 });
+            materials.bigEnemy = new THREE.MeshPhongMaterial({ color: 0xff8800, emissive: 0x331100, emissiveIntensity: 0.8 });
+            materials.boss = new THREE.MeshPhongMaterial({ color: 0x8800ff, emissive: 0x220044, emissiveIntensity: 1 });
+            materials.projectile = new THREE.MeshBasicMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 2 });
+            materials.enemyProjectile = new THREE.MeshBasicMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 2 });
+            materials.shieldPowerUp = new THREE.MeshBasicMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 1.5 });
+            materials.rapidFirePowerUp = new THREE.MeshBasicMaterial({ color: 0x0000ff, emissive: 0x0000ff, emissiveIntensity: 1.5 });
+            materials.spreadShotPowerUp = new THREE.MeshBasicMaterial({ color: 0xff00ff, emissive: 0xff00ff, emissiveIntensity: 1.5 });
+            materials.hitFlash = new THREE.MeshBasicMaterial({ color: 0xffffff }); // White flash material
+        }
+
+        // --- Game Objects ---
+        function createPlayerShip() {
+            if (player.mesh) {
+                scene.remove(player.mesh);
+                player.mesh.geometry.dispose();
+                player.mesh.material.dispose();
+                if(player.light) scene.remove(player.light);
+            }
+
+            player.mesh = new THREE.Mesh(geometries.player, materials.player);
+            player.mesh.position.set(0, -worldHeight / 2 + playerSize.height / 2 + 1, 0); // Start at bottom center
+            player.mesh.castShadow = true;
+            player.mesh.receiveShadow = true;
+            scene.add(player.mesh);
+
+            // Player thruster light
+            player.light = new THREE.PointLight(0x00aaff, 1, 10);
+            player.light.position.set(0, player.mesh.position.y - playerSize.height / 2, 0);
+            scene.add(player.light);
+        }
+
+        class Enemy {
+            constructor(type, x, y, z = 0) {
+                this.type = type;
+                this.health = 0;
+                this.maxHealth = 0;
+                this.speed = 0;
+                this.fireRate = 0;
+                this.lastShotTime = 0;
+                this.points = 0;
+                this.mesh = null;
+                this.light = null;
+                this.hitTimer = 0; // For hit flash effect
+                this.originalMaterial = null; // Store original material
+
+                switch (type) {
+                    case 'small':
+                        this.health = this.maxHealth = ENEMY_SMALL_HEALTH;
+                        this.speed = ENEMY_SMALL_SPEED;
+                        this.fireRate = 2 + Math.random() * 2; // 2-4 seconds
+                        this.points = 10;
+                        this.mesh = new THREE.Mesh(geometries.smallEnemy, materials.smallEnemy.clone());
+                        this.originalMaterial = materials.smallEnemy;
+                        this.size = 1.5;
+                        break;
+                    case 'big':
+                        this.health = this.maxHealth = ENEMY_BIG_HEALTH;
+                        this.speed = ENEMY_BIG_SPEED;
+                        this.fireRate = 3 + Math.random() * 3; // 3-6 seconds
+                        this.points = 30;
+                        this.mesh = new THREE.Mesh(geometries.bigEnemy, materials.bigEnemy.clone());
+                        this.originalMaterial = materials.bigEnemy;
+                        this.size = 2.5;
+                        break;
+                    case 'boss':
+                        this.health = this.maxHealth = ENEMY_BOSS_HEALTH;
+                        this.speed = ENEMY_BIG_SPEED * 0.5; // Boss moves slower
+                        this.fireRate = 1; // Boss fires frequently
+                        this.points = 1000;
+                        this.mesh = new THREE.Mesh(geometries.boss, materials.boss.clone());
+                        this.originalMaterial = materials.boss;
+                        this.size = 4;
+                        break;
+                }
+
+                this.mesh.position.set(x, y, z);
+                this.mesh.castShadow = true;
+                this.mesh.receiveShadow = true;
+                scene.add(this.mesh);
+
+                this.light = new THREE.PointLight(this.mesh.material.color, 0.5, 10);
+                this.light.position.copy(this.mesh.position);
+                scene.add(this.light);
+
+                // Create and attach health bar DOM element
+                this.healthBarElement = document.createElement('div');
+                this.healthBarElement.className = 'enemy-health-bar';
+                gameContainer.appendChild(this.healthBarElement);
+
+                const healthBarFill = document.createElement('div');
+                healthBarFill.className = 'enemy-health-bar-fill';
+                this.healthBarElement.appendChild(healthBarFill);
+                this.updateHealthBar();
+            }
+
+            takeDamage(amount) {
+                if (this.health <= 0) return;
+                this.health -= amount;
+                playSound('enemyHit');
+                this.hitTimer = 0.1; // Flash for 0.1 seconds
+                this.mesh.material = materials.hitFlash; // Apply white flash
+                this.updateHealthBar();
+                spawnParticles(this.mesh.position, 0xffffff, 5); // Hit particles
+                if (this.health <= 0) {
+                    this.die();
+                }
+            }
+
+            update(dt) {
+                if (this.hitTimer > 0) {
+                    this.hitTimer -= dt;
+                    if (this.hitTimer <= 0) {
+                        this.mesh.material = this.originalMaterial; // Revert material
+                    }
+                }
+                this.mesh.position.y -= this.speed * dt;
+                this.light.position.copy(this.mesh.position);
+
+                // Enemy shooting
+                if (this.mesh.position.y < worldHeight / 2 - 5 && audioContext && !this.isBoss && !player.isInvulnerable) { // Only regular enemies shoot
+                    if (audioContext.currentTime - this.lastShotTime > this.fireRate) {
+                        this.shoot();
+                        this.lastShotTime = audioContext.currentTime;
+                    }
+                }
+
+                // Remove if off screen
+                if (this.mesh.position.y < -worldHeight / 2 - this.size) {
+                    this.remove();
+                }
+            }
+
+            shoot() {
+                const projectile = new Projectile(this.mesh.position.x, this.mesh.position.y - this.size / 2, -PLAYER_PROJECTILE_SPEED * 0.5, false);
+                enemyProjectiles.push(projectile);
+                playSound('enemyShoot');
+            }
+
+            die() {
+                player.score += this.points;
+                spawnParticles(this.mesh.position, this.mesh.material.color.getHex(), 20); // Explosion particles
+                playSound('explosion');
+                this.remove();
+
+                // Drop power-up or score
+                if (Math.random() < 0.2 || this.type === 'big' || this.type === 'boss') { // 20% chance or guaranteed for big/boss
+                    this.dropPowerUp();
+                }
+            }
+
+            dropPowerUp() {
+                const r = Math.random();
+                let type;
+                if (r < 0.33) type = 'shield';
+                else if (r < 0.66) type = 'rapidFire';
+                else type = 'spreadShot';
+                powerUps.push(new PowerUp(type, this.mesh.position.x, this.mesh.position.y));
+            }
+
+            remove() {
+                scene.remove(this.mesh);
+                scene.remove(this.light);
+                this.mesh.geometry.dispose();
+                this.mesh.material.dispose();
+                this.healthBarElement.remove(); // Remove DOM element
+                enemies.splice(enemies.indexOf(this), 1);
+            }
+
+            updateHealthBar() {
+                const percent = Math.max(0, this.health / this.maxHealth);
+                this.healthBarElement.querySelector('.enemy-health-bar-fill').style.width = `${percent * 100}%`;
+                // Position health bar above the enemy
+                const vector = new THREE.Vector3();
+                this.mesh.getWorldPosition(vector);
+                vector.project(camera);
+
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+                this.healthBarElement.style.left = `${x}px`;
+                this.healthBarElement.style.top = `${y - this.size * 10}px`; // Adjust offset based on enemy size
+                this.healthBarElement.style.width = `${this.size * 10}px`; // Adjust width based on enemy size
+
+                this.healthBarElement.style.opacity = (percent > 0 && percent < 1) ? '1' : '0'; // Only show if damaged
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, velocityY, isPlayer) {
+                this.isPlayer = isPlayer;
+                this.velocity = new THREE.Vector3(0, velocityY, 0);
+                const material = isPlayer ? materials.projectile : materials.enemyProjectile;
+                const geometry = isPlayer ? geometries.projectile : geometries.enemyProjectile;
+                this.mesh = new THREE.Mesh(geometry, material);
+                this.mesh.position.set(x, y, 0);
+                scene.add(this.mesh);
+                this.size = isPlayer ? 0.2 : 0.3; // For collision detection
+            }
+
+            update(dt) {
+                this.mesh.position.addScaledVector(this.velocity, dt);
+
+                // Remove if off screen
+                if (this.mesh.position.y > worldHeight / 2 || this.mesh.position.y < -worldHeight / 2) {
+                    this.remove();
+                }
+            }
+
+            remove() {
+                scene.remove(this.mesh);
+                this.mesh.geometry.dispose();
+                this.mesh.material.dispose();
+                if (this.isPlayer) {
+                    playerProjectiles.splice(playerProjectiles.indexOf(this), 1);
+                } else {
+                    enemyProjectiles.splice(enemyProjectiles.indexOf(this), 1);
+                }
+            }
+        }
+
+        class PowerUp {
+            constructor(type, x, y) {
+                this.type = type;
+                this.mesh = null;
+                this.speed = 3;
+                this.size = 1; // For collision detection
+
+                switch (type) {
+                    case 'shield':
+                        this.mesh = new THREE.Mesh(geometries.shield, materials.shieldPowerUp);
+                        break;
+                    case 'rapidFire':
+                        this.mesh = new THREE.Mesh(geometries.rapidFire, materials.rapidFirePowerUp);
+                        break;
+                    case 'spreadShot':
+                        this.mesh = new THREE.Mesh(geometries.spreadShot, materials.spreadShotPowerUp);
+                        break;
+                }
+                this.mesh.position.set(x, y, 0);
+                scene.add(this.mesh);
+            }
+
+            update(dt) {
+                this.mesh.position.y -= this.speed * dt;
+                this.mesh.rotation.y += Math.PI * dt; // Rotate for visual effect
+
+                if (this.mesh.position.y < -worldHeight / 2 - this.size) {
+                    this.remove();
+                }
+            }
+
+            remove() {
+                scene.remove(this.mesh);
+                this.mesh.geometry.dispose();
+                this.mesh.material.dispose();
+                powerUps.splice(powerUps.indexOf(this), 1);
+            }
+        }
+
+        class Particle {
+            constructor(position, color, velocity, size = 0.1, life = 1) {
+                this.velocity = velocity;
+                this.life = life;
+                this.maxLife = life;
+                this.mesh = new THREE.Mesh(geometries.projectile, new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 1 }));
+                this.mesh.position.copy(position);
+                this.mesh.scale.set(size, size, size);
+                scene.add(this.mesh);
+            }
+
+            update(dt) {
+                this.mesh.position.addScaledVector(this.velocity, dt);
+                this.life -= dt;
+                this.mesh.material.opacity = this.life / this.maxLife;
+                if (this.life <= 0) {
+                    this.remove();
+                }
+            }
+
+            remove() {
+                scene.remove(this.mesh);
+                this.mesh.geometry.dispose();
+                this.mesh.material.dispose();
+                particles.splice(particles.indexOf(this), 1);
+            }
+        }
+
+        function spawnParticles(position, color, count, size = 0.1, speed = 5, life = 0.5) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = new THREE.Vector3(
+                    Math.cos(angle) * speed * (0.5 + Math.random() * 0.5),
+                    Math.sin(angle) * speed * (0.5 + Math.random() * 0.5),
+                    (Math.random() - 0.5) * speed * 0.2 // Slight z-variance
+                );
+                particles.push(new Particle(position, color, velocity, size * (0.5 + Math.random() * 0.5), life * (0.5 + Math.random() * 0.5)));
+            }
+        }
+
+        // --- Game Logic ---
+        function startGame() {
+            currentState = GAME_STATE.PLAYING;
+            titleScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            hud.style.display = 'flex';
+            controlsOverlay.style.display = 'block';
+
+            resetGame();
+            createPlayerShip();
+            startNewWave();
+        }
+
+        function resetGame() {
+            player.health = PLAYER_MAX_HEALTH;
+            player.score = 0;
+            player.lastShotTime = 0;
+            player.isInvulnerable = false;
+            player.invulnerableTimer = 0;
+            player.rapidFireTimer = 0;
+            player.spreadShotTimer = 0;
+            player.shieldTimer = 0;
+            player.projectileColor = 0x00ffff;
+
+            wave = 0;
+            enemiesToSpawn = 0;
+            spawnTimer = 0;
+            waveTimer = 0;
+
+            // Clear all game objects
+            enemies.forEach(e => e.remove());
+            enemies = [];
+            playerProjectiles.forEach(p => p.remove());
+            playerProjectiles = [];
+            enemyProjectiles.forEach(p => p.remove());
+            enemyProjectiles = [];
+            powerUps.forEach(pu => pu.remove());
+            powerUps = [];
+            particles.forEach(p => p.remove());
+            particles = [];
+        }
+
+        function startNewWave() {
+            wave++;
+            waveTimer = WAVE_COOLDOWN; // Time before enemies start spawning
+            enemiesToSpawn = 5 + wave * 2; // More enemies each wave
+            if (wave % BOSS_WAVE_INTERVAL === 0) {
+                enemiesToSpawn = 1; // Only the boss for boss waves
+            }
+            spawnTimer = 0; // Reset spawn timer
+            hud.style.display = 'flex'; // Ensure HUD is visible
+            updateHUD();
+        }
+
+        function spawnEnemy() {
+            if (enemiesToSpawn <= 0) return;
+
+            let type = 'small';
+            if (wave % BOSS_WAVE_INTERVAL === 0) {
+                type = 'boss';
+            } else if (Math.random() < 0.3 * (wave / 10 + 1) && wave > 1) { // Chance for big enemies increases with waves
+                type = 'big';
+            }
+
+            const x = Math.random() * (worldWidth - 2) - (worldWidth / 2 - 1); // Random X within bounds
+            const y = worldHeight / 2 + 5; // Start off screen
+            enemies.push(new Enemy(type, x, y));
+            enemiesToSpawn--;
+        }
+
+        function updatePlayer(dt) {
+            let dx = 0;
+            let dy = 0;
+
+            if (keys['ArrowLeft'] || keys['a']) dx = -1;
+            if (keys['ArrowRight'] || keys['d']) dx = 1;
+            if (keys['ArrowUp'] || keys['w']) dy = 1;
+            if (keys['ArrowDown'] || keys['s']) dy = -1;
+
+            if (dx !== 0 || dy !== 0) {
+                const moveVector = new THREE.Vector3(dx, dy, 0).normalize();
+                player.mesh.position.x += moveVector.x * PLAYER_SPEED * dt;
+                player.mesh.position.y += moveVector.y * PLAYER_SPEED * dt;
+
+                // Clamp player position to screen bounds
+                player.mesh.position.x = Math.max(-worldWidth / 2 + playerSize.width / 2, Math.min(worldWidth / 2 - playerSize.width / 2, player.mesh.position.x));
+                player.mesh.position.y = Math.max(-worldHeight / 2 + playerSize.height / 2, Math.min(worldHeight / 2 - playerSize.height / 2, player.mesh.position.y));
+            }
+            player.light.position.set(player.mesh.position.x, player.mesh.position.y - playerSize.height / 2, player.mesh.position.z);
+
+            // Shooting
+            if (keys[' ']) { // Spacebar
+                const fireRate = player.rapidFireTimer > 0 ? PLAYER_FIRE_RATE * 0.5 : PLAYER_FIRE_RATE;
+                if (audioContext.currentTime - player.lastShotTime > fireRate) {
+                    if (player.spreadShotTimer > 0) {
+                        playerProjectiles.push(new Projectile(player.mesh.position.x, player.mesh.position.y + playerSize.height / 2, PLAYER_PROJECTILE_SPEED, true));
+                        playerProjectiles.push(new Projectile(player.mesh.position.x - 0.5, player.mesh.position.y + playerSize.height / 2 - 0.5, PLAYER_PROJECTILE_SPEED * 0.8, true));
+                        playerProjectiles.push(new Projectile(player.mesh.position.x + 0.5, player.mesh.position.y + playerSize.height / 2 - 0.5, PLAYER_PROJECTILE_SPEED * 0.8, true));
+                    } else {
+                        playerProjectiles.push(new Projectile(player.mesh.position.x, player.mesh.position.y + playerSize.height / 2, PLAYER_PROJECTILE_SPEED, true));
+                    }
+                    player.lastShotTime = audioContext.currentTime;
+                    playSound('playerShoot');
+                }
+            }
+
+            // Power-up timers
+            if (player.rapidFireTimer > 0) {
+                player.rapidFireTimer -= dt;
+                rapidFireStatus.textContent = `ON (${player.rapidFireTimer.toFixed(1)}s)`;
+            } else {
+                rapidFireStatus.textContent = 'OFF';
+            }
+            if (player.spreadShotTimer > 0) {
+                player.spreadShotTimer -= dt;
+                spreadShotStatus.textContent = `ON (${player.spreadShotTimer.toFixed(1)}s)`;
+            } else {
+                spreadShotStatus.textContent = 'OFF';
+            }
+            if (player.shieldTimer > 0) {
+                player.shieldTimer -= dt;
+                shieldStatus.textContent = `ON (${player.shieldTimer.toFixed(1)}s)`;
+                if (!player.mesh.children.includes(player.shieldMesh)) { // Add shield visual
+                    player.shieldMesh = new THREE.Mesh(geometries.player, materials.playerShield);
+                    player.shieldMesh.scale.set(1.2,1.2,1.2);
+                    player.mesh.add(player.shieldMesh);
+                }
+            } else {
+                if (player.shieldMesh && player.mesh.children.includes(player.shieldMesh)) { // Remove shield visual
+                    player.mesh.remove(player.shieldMesh);
+                    player.shieldMesh.geometry.dispose();
+                    player.shieldMesh.material.dispose();
+                    player.shieldMesh = null;
+                }
+                shieldStatus.textContent = 'OFF';
+            }
+
+            player.isInvulnerable = player.invulnerableTimer > 0 || player.shieldTimer > 0;
+            if (player.invulnerableTimer > 0) {
+                player.invulnerableTimer -= dt;
+                player.mesh.visible = (Math.floor(audioContext.currentTime * 10) % 2 === 0); // Blink effect
+            } else {
+                player.mesh.visible = true;
+            }
+        }
+
+        function updateCollisions() {
+            const playerBox = new THREE.Box3().setFromObject(player.mesh);
+
+            // Player Projectiles vs. Enemies
+            for (let i = playerProjectiles.length - 1; i >= 0; i--) {
+                const p = playerProjectiles[i];
+                const pBox = new THREE.Box3().setFromObject(p.mesh);
+
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const e = enemies[j];
+                    const eBox = new THREE.Box3().setFromObject(e.mesh);
+
+                    if (pBox.intersectsBox(eBox)) {
+                        e.takeDamage(10); // Standard damage
+                        p.remove();
+                        break;
+                    }
+                }
+            }
+
+            // Enemy Projectiles vs. Player
+            if (!player.isInvulnerable) {
+                for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
+                    const ep = enemyProjectiles[i];
+                    const epBox = new THREE.Box3().setFromObject(ep.mesh);
+
+                    if (epBox.intersectsBox(playerBox)) {
+                        player.health -= 10;
+                        player.invulnerableTimer = INVULNERABILITY_DURATION;
+                        ep.remove();
+                        screenShake(0.5, 0.2); // Small shake
+                        playSound('playerHit');
+                        updateHUD();
+                        if (player.health <= 0) {
+                            gameOver();
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Enemies vs. Player
+            if (!player.isInvulnerable) {
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    const eBox = new THREE.Box3().setFromObject(e.mesh);
+
+                    if (playerBox.intersectsBox(eBox)) {
+                        player.health -= 20; // More damage for direct collision
+                        player.invulnerableTimer = INVULNERABILITY_DURATION;
+                        e.takeDamage(PLAYER_MAX_HEALTH); // Enemy dies on collision
+                        screenShake(1, 0.3); // Bigger shake
+                        playSound('playerHit');
+                        updateHUD();
+                        if (player.health <= 0) {
+                            gameOver();
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Power-ups vs. Player
+            for (let i = powerUps.length - 1; i >= 0; i--) {
+                const pu = powerUps[i];
+                const puBox = new THREE.Box3().setFromObject(pu.mesh);
+
+                if (playerBox.intersectsBox(puBox)) {
+                    activatePowerUp(pu.type);
+                    pu.remove();
+                    playSound('powerUp');
+                    break;
+                }
+            }
+        }
+
+        function activatePowerUp(type) {
+            switch (type) {
+                case 'shield':
+                    player.shieldTimer = POWERUP_DURATION;
+                    break;
+                case 'rapidFire':
+                    player.rapidFireTimer = POWERUP_DURATION;
+                    break;
+                case 'spreadShot':
+                    player.spreadShotTimer = POWERUP_DURATION;
+                    break;
+            }
+            updateHUD();
+        }
+
+        function updateHUD() {
+            scoreDisplay.textContent = player.score;
+            waveDisplay.textContent = wave;
+            healthBar.style.width = `${Math.max(0, player.health)}%`;
+            healthBar.style.backgroundColor = player.health > 50 ? '#00ff00' : (player.health > 20 ? '#ffff00' : '#ff0000');
+            healthBar.style.boxShadow = `0 0 5px ${player.health > 50 ? '#00ff00' : (player.health > 20 ? '#ffff00' : '#ff0000')}`;
+
+            shieldStatus.textContent = player.shieldTimer > 0 ? `ON (${player.shieldTimer.toFixed(1)}s)` : 'OFF';
+            rapidFireStatus.textContent = player.rapidFireTimer > 0 ? `ON (${player.rapidFireTimer.toFixed(1)}s)` : 'OFF';
+            spreadShotStatus.textContent = player.spreadShotTimer > 0 ? `ON (${player.spreadShotTimer.toFixed(1)}s)` : 'OFF';
+        }
+
+        function gameOver() {
+            currentState = GAME_STATE.GAME_OVER;
+            finalScoreDisplay.textContent = player.score;
+            gameOverScreen.style.display = 'flex';
+            hud.style.display = 'none';
+            controlsOverlay.style.display = 'none';
+            playSound('gameOver');
+
+            // Clear all current game objects from scene
+            enemies.forEach(e => e.remove());
+            enemies = [];
+            playerProjectiles.forEach(p => p.remove());
+            playerProjectiles = [];
+            enemyProjectiles.forEach(p => p.remove());
+            enemyProjectiles = [];
+            powerUps.forEach(pu => pu.remove());
+            powerUps = [];
+            particles.forEach(p => p.remove());
+            particles = [];
+            if (player.mesh) {
+                scene.remove(player.mesh);
+                player.mesh.geometry.dispose();
+                player.mesh.material.dispose();
+                player.mesh = null;
+            }
+            if (player.light) {
+                scene.remove(player.light);
+                player.light = null;
+            }
+        }
+
+        function screenShake(amount, duration) {
+            screenShakeAmount = amount;
+            screenShakeDuration = duration;
+        }
+
+        // --- Game Loop ---
+        let lastTime = 0;
+        function gameLoop(timestamp) {
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // Cap dt at 50ms
+            lastTime = timestamp;
+
+            if (currentState === GAME_STATE.PLAYING) {
+                // Update game objects
+                updatePlayer(dt);
+                playerProjectiles.forEach(p => p.update(dt));
+                enemyProjectiles.forEach(p => p.update(dt));
+                powerUps.forEach(pu => pu.update(dt));
+                particles.forEach(p => p.update(dt));
+                enemies.forEach(e => {
+                    e.update(dt);
+                    e.updateHealthBar(); // Update enemy health bar positions
+                });
+
+                updateCollisions();
+
+                // Wave progression
+                if (enemies.length === 0 && enemiesToSpawn === 0) {
+                    waveTimer -= dt;
+                    if (waveTimer <= 0) {
+                        startNewWave();
+                    }
+                } else if (enemiesToSpawn > 0) {
+                    spawnTimer -= dt;
+                    if (spawnTimer <= 0) {
+                        spawnEnemy();
+                        spawnTimer = 1 + Math.random() * 0.5; // Spawn a new enemy every 1-1.5 seconds
+                    }
+                }
+
+                // Screen shake
+                if (screenShakeDuration > 0) {
+                    screenShakeDuration -= dt;
+                    camera.position.x = Math.sin(timestamp * 100) * screenShakeAmount;
+                    camera.position.y = Math.cos(timestamp * 100) * screenShakeAmount;
+                    screenShakeAmount *= (1 - dt * 5); // Decay shake intensity
+                } else {
+                    camera.position.x = 0;
+                    camera.position.y = -worldHeight / 4; // Reset camera Y
+                }
+            }
+
+            // Animate starfield regardless of game state
+            starfieldParticles.forEach(stars => {
+                stars.geometry.attributes.position.array.forEach((val, i) => {
+                    if (i % 3 === 1) { // Y-coordinate
+                        stars.geometry.attributes.position.array[i] -= dt * 2; // Scroll speed
+                        if (stars.geometry.attributes.position.array[i] < -worldHeight / 2) {
+                            stars.geometry.attributes.position.array[i] = worldHeight / 2; // Loop
+                        }
+                    }
+                });
+                stars.geometry.attributes.position.needsUpdate = true;
+            });
+
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === ' ' && currentState === GAME_STATE.TITLE) {
+                startButton.click(); // Trigger start game from spacebar on title screen
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+
+        // --- Initialization ---
+        initThreeJS();
+        createSharedResources();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

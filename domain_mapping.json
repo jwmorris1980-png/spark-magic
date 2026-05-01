@@ -1,0 +1,11 @@
+{
+  "apiVersion": "domains.cloudrun.com/v1",
+  "kind": "DomainMapping",
+  "metadata": {
+    "name": "www.sparks-magic.com",
+    "namespace": "682818593798"
+  },
+  "spec": {
+    "routeName": "spark-magic"
+  }
+}

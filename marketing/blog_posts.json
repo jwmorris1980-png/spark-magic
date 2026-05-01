@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "date": "2026-04-30",
+    "title": "Welcome to the Magic: The Spark Blog is Live!",
+    "author": "The Spark Team",
+    "content": "Today marks a huge milestone for Spark Magic. We are officially launching our weekly dev blog! This is where we will share all the cool things we are building behind the scenes. Our mission is to create the safest, most creative AI companion for children. This week, we focused on making Spark's brain more reliable and adding a multi-tier 'Magic Engine' for images. Stay tuned for weekly updates on our journey to redefine childhood creativity!",
+    "tags": ["Announcements", "Vision"]
+  },
+  {
+    "id": 2,
+    "date": "2026-04-23",
+    "title": "Making Spark Smarter and Safer",
+    "author": "Spark Engineering",
+    "content": "We've been hard at work refining our safety filters and ensuring that Spark's 'Walled Garden' is the most secure digital playground on the planet. We've also updated our Text-to-Speech engine to sound even more friendly and human-like. Next week, we're looking into game generation improvements!",
+    "tags": ["Updates", "Safety"]
+  }
+]
